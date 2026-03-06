@@ -3,27 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Frequency Pulse Generator + Log</title>
+    <title>Ultrapulse v1.1 - Multitone Engine</title>
     <style>
         body { font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #121212; color: #00ff41; }
         .card { background: #1e1e1e; padding: 25px; border-radius: 12px; border: 1px solid #333; width: 100%; max-width: 600px; box-shadow: 0 0 20px rgba(0,255,65,0.1); }
         .controls { margin-bottom: 20px; }
         label { display: block; margin-top: 15px; font-weight: bold; color: #888; }
-        input[type="range"] { width: 100%; accent-color: #00ff41; }
+        input[type="range"], select { width: 100%; background: #000; color: #00ff41; border: 1px solid #333; padding: 8px; margin-top: 8px; accent-color: #00ff41; }
         canvas { width: 100%; height: 120px; background: #000; border: 1px solid #333; margin: 15px 0; }
-        
-        #log-container {
-            height: 150px;
-            overflow-y: hidden;
-            background: #000;
-            padding: 10px;
-            font-size: 12px;
-            border: 1px solid #333;
-            display: flex;
-            flex-direction: column-reverse;
-        }
-        .log-entry { border-left: 2px solid #00ff41; padding-left: 8px; margin-bottom: 4px; }
-        
+        #log-container { height: 120px; overflow-y: hidden; background: #000; padding: 10px; font-size: 11px; border: 1px solid #333; display: flex; flex-direction: column-reverse; color: #008f11; }
+        .log-entry { border-left: 2px solid #00ff41; padding-left: 8px; margin-bottom: 2px; }
         button { margin-top: 25px; padding: 15px; cursor: pointer; width: 100%; border: 1px solid #00ff41; background: transparent; color: #00ff41; font-size: 18px; font-weight: bold; transition: 0.3s; }
         button:hover { background: rgba(0,255,65,0.1); }
         button.stop { color: #ff4141; border-color: #ff4141; }
@@ -33,9 +22,15 @@
 <body>
 
 <div class="card">
-    <h2 style="margin:0; text-align: center;">RF-AUDIO PULSE GENERATOR</h2>
+    <h2 style="margin:0; text-align: center; letter-spacing: 2px;">ULTRAPULSE v1.1</h2>
     
     <div class="controls">
+        <label>Playback Mode</label>
+        <select id="playMode">
+            <option value="single">Single Tone (Random Series)</option>
+            <option value="group">Full Group (Polyphonic Burst)</option>
+        </select>
+
         <label>Master Volume <span class="val-display" id="volLabel">0.01</span></label>
         <input type="range" id="masterVol" min="0" max="0.1" step="0.001" value="0.01">
 
@@ -44,9 +39,7 @@
     </div>
 
     <canvas id="visualizer"></canvas>
-
-    <div id="log-container">
-        </div>
+    <div id="log-container"></div>
 
     <button id="startBtn">INITIALIZE SEQUENCE</button>
 </div>
@@ -61,33 +54,28 @@
 
     const generateGroups = () => {
         const groups = [];
-        // Group logic: Start points 1.0, 1.1, 1.2 ... 1.9
         for (let i = 0; i <= 9; i++) {
             let startVal = 1.0 + (i * 0.1);
             const freqList = [];
-            
-            // Per prompt: Group 2 starts at 1.5
             let actualStart = (i === 1) ? 1.5 : startVal;
-            
-            // Max frequency 40kHz (Group 2 ends at 39.5kHz)
             let limit = (i === 1) ? 39.5 : 40.0;
 
             for (let f = actualStart; f <= limit; f += 1.0) {
                 freqList.push(Math.round(f * 1000)); 
             }
-            groups.push({ id: i + 1, freqs: freqList, startTag: actualStart.toFixed(1) });
+            groups.push({ id: i + 1, freqs: freqList });
         }
         return groups;
     };
 
     const groups = generateGroups();
 
-    const addLog = (groupId, freq) => {
+    const addLog = (msg) => {
         const div = document.createElement('div');
         div.className = 'log-entry';
-        div.textContent = `[GROUP ${groupId}] -> ${freq} Hz`;
+        div.textContent = msg;
         logEl.prepend(div);
-        if (logEl.childNodes.length > 8) logEl.removeChild(logEl.lastChild);
+        if (logEl.childNodes.length > 10) logEl.removeChild(logEl.lastChild);
     };
 
     const draw = () => {
@@ -95,13 +83,11 @@
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         analyser.getByteTimeDomainData(dataArray);
-
         canvasCtx.fillStyle = '#000';
         canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
         canvasCtx.lineWidth = 1;
         canvasCtx.strokeStyle = '#00ff41';
         canvasCtx.beginPath();
-
         const sliceWidth = canvas.width / bufferLength;
         let x = 0;
         for (let i = 0; i < bufferLength; i++) {
@@ -122,29 +108,38 @@
 
         const durationMs = parseInt(document.getElementById('duration').value);
         const durationSec = durationMs / 1000;
+        const mode = document.getElementById('playMode').value;
 
         const group = groups[Math.floor(Math.random() * groups.length)];
-        const freq = group.freqs[Math.floor(Math.random() * group.freqs.length)];
-
-        addLog(group.id, freq);
-
-        const osc = audioCtx.createOscillator();
-        const pulseGain = audioCtx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-
-        pulseGain.connect(masterGain);
-        osc.connect(pulseGain);
-
         const now = audioCtx.currentTime;
-        pulseGain.gain.setValueAtTime(0, now);
-        pulseGain.gain.linearRampToValueAtTime(1, now + 0.0002); 
-        pulseGain.gain.setValueAtTime(1, now + durationSec - 0.0002);
-        pulseGain.gain.linearRampToValueAtTime(0, now + durationSec);
 
-        osc.start(now);
-        osc.stop(now + durationSec);
+        // Determine which frequencies to play
+        const freqsToPlay = (mode === 'single') 
+            ? [group.freqs[Math.floor(Math.random() * group.freqs.length)]] 
+            : group.freqs;
+
+        // Log the action
+        addLog(mode === 'single' ? `[SGL] G${group.id} @ ${freqsToPlay[0]}Hz` : `[GRP] G${group.id} (${freqsToPlay.length} tones)`);
+
+        // Create a temporary gain node for this specific burst to prevent clipping
+        const burstGain = audioCtx.createGain();
+        burstGain.connect(masterGain);
+        
+        // Compensate volume for polyphony: 1/N to prevent summing above 1.0
+        const volumeScaling = mode === 'group' ? (1 / freqsToPlay.length) : 1;
+        burstGain.gain.setValueAtTime(0, now);
+        burstGain.gain.linearRampToValueAtTime(volumeScaling, now + 0.0002);
+        burstGain.gain.setValueAtTime(volumeScaling, now + durationSec - 0.0002);
+        burstGain.gain.linearRampToValueAtTime(0, now + durationSec);
+
+        freqsToPlay.forEach(f => {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(f, now);
+            osc.connect(burstGain);
+            osc.start(now);
+            osc.stop(now + durationSec);
+        });
 
         setTimeout(playPulse, durationMs);
     };
@@ -154,12 +149,9 @@
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             masterGain = audioCtx.createGain();
             analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 2048;
-            
             masterGain.gain.value = document.getElementById('masterVol').value;
             masterGain.connect(analyser);
             analyser.connect(audioCtx.destination);
-            
             isRunning = true;
             document.getElementById('startBtn').textContent = "STOP SEQUENCE";
             document.getElementById('startBtn').classList.add('stop');
@@ -184,4 +176,3 @@
 </script>
 </body>
 </html>
-
