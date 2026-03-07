@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultrapulse v1.5 - Stereo High-Density</title>
+    <title>Ultrapulse v1.6 - 1Hz to 22kHz</title>
     <style>
         body { font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #050505; color: #00ff41; }
         .card { background: #111; padding: 25px; border-radius: 12px; border: 1px solid #00ff4155; width: 100%; max-width: 600px; box-shadow: 0 0 40px rgba(0,255,100,0.1); }
@@ -24,7 +24,8 @@
 <body>
 
 <div class="card">
-    <h2 style="margin:0; text-align: center; letter-spacing: 6px; color: #fff;">ULTRAPULSE v1.5</h2>
+    <h2 style="margin:0; text-align: center; letter-spacing: 6px; color: #fff;">ULTRAPULSE v1.6</h2>
+    <p style="text-align:center; font-size: 10px; color: #888;">RANGE: 1Hz — 22,000Hz</p>
     
     <div class="controls">
         <label>Engine Mode</label>
@@ -60,17 +61,24 @@
     const allFreqs = new Set();
     const groups = [];
 
-    // Frequency Generation
+    // Frequency Generation updated for 1Hz - 22kHz
     for (let i = 0; i <= 9; i++) {
         let start = 1.0 + (i * 0.1);
         if (i === 1) start = 1.5;
         const list = [];
-        let limit = (i === 1) ? 39.5 : 40.0;
+        let limit = 22.0; // Limit reduced to 22kHz
+
         for (let f = start; f <= limit; f += 1.0) {
             let hz = Math.round(f * 1000);
-            list.push(hz);
-            allFreqs.add(hz);
+            if (hz >= 1 && hz <= 22000) {
+                list.push(hz);
+                allFreqs.add(hz);
+            }
         }
+        // Add the specific base frequency (1Hz, 1.1kHz, etc)
+        // Ensure 1Hz is explicitly added to the pool
+        if (i === 0) { allFreqs.add(1); list.unshift(1); }
+        
         groups.push({ id: i + 1, freqs: list });
     }
     const globalPool = Array.from(allFreqs);
@@ -144,9 +152,8 @@
 
         freqsToPlay.forEach(f => {
             const osc = audioCtx.createOscillator();
-            // Random Panning Logic
             const panner = audioCtx.createStereoPanner();
-            panner.pan.setValueAtTime((Math.random() * 2 - 1), now); // Range -1 (L) to 1 (R)
+            panner.pan.setValueAtTime((Math.random() * 2 - 1), now);
 
             osc.frequency.setValueAtTime(f, now);
             osc.connect(panner);
