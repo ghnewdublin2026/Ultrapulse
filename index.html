@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultrapulse v1.6 - 1Hz to 22kHz</title>
+    <title>Ultrapulse v1.7 - 100-Tone Density</title>
     <style>
         body { font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #050505; color: #00ff41; }
         .card { background: #111; padding: 25px; border-radius: 12px; border: 1px solid #00ff4155; width: 100%; max-width: 600px; box-shadow: 0 0 40px rgba(0,255,100,0.1); }
@@ -11,7 +11,7 @@
         .input-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
         label { display: block; margin-top: 15px; font-weight: bold; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
         input[type="range"], select { flex-grow: 1; background: #000; color: #00ff41; border: 1px solid #333; padding: 10px; border-radius: 4px; outline: none; }
-        input[type="number"] { width: 60px; background: #000; color: #fff; border: 1px solid #00ff41; padding: 8px; border-radius: 4px; text-align: center; }
+        input[type="number"] { width: 70px; background: #000; color: #fff; border: 1px solid #00ff41; padding: 8px; border-radius: 4px; text-align: center; }
         canvas { width: 100%; height: 120px; background: #000; border: 1px solid #222; margin: 15px 0; }
         #log-container { height: 100px; overflow-y: hidden; background: #000; padding: 10px; font-size: 11px; border: 1px solid #222; display: flex; flex-direction: column-reverse; color: #00ff41; }
         .log-entry { border-left: 3px solid #00ff41; padding-left: 8px; margin-bottom: 3px; background: rgba(0, 255, 65, 0.05); }
@@ -24,8 +24,8 @@
 <body>
 
 <div class="card">
-    <h2 style="margin:0; text-align: center; letter-spacing: 6px; color: #fff;">ULTRAPULSE v1.6</h2>
-    <p style="text-align:center; font-size: 10px; color: #888;">RANGE: 1Hz — 22,000Hz</p>
+    <h2 style="margin:0; text-align: center; letter-spacing: 6px; color: #fff;">ULTRAPULSE v1.7</h2>
+    <p style="text-align:center; font-size: 10px; color: #888;">MAX DENSITY: 100 CONCURRENT TONES</p>
     
     <div class="controls">
         <label>Engine Mode</label>
@@ -36,10 +36,10 @@
             <option value="multi-global" selected>Multi-Global Cluster</option>
         </select>
 
-        <label>Max Concurrent Tones (1-50)</label>
+        <label>Max Concurrent Tones (1-100)</label>
         <div class="input-row">
-            <input type="range" id="toneSlider" min="1" max="50" step="1" value="10">
-            <input type="number" id="toneInput" min="1" max="50" value="10">
+            <input type="range" id="toneSlider" min="1" max="100" step="1" value="10">
+            <input type="number" id="toneInput" min="1" max="100" value="10">
         </div>
 
         <label>Master Gain <span class="val-display" id="volLabel">0.01</span></label>
@@ -61,24 +61,17 @@
     const allFreqs = new Set();
     const groups = [];
 
-    // Frequency Generation updated for 1Hz - 22kHz
+    // Frequency Generation Logic (1Hz - 22kHz)
     for (let i = 0; i <= 9; i++) {
         let start = 1.0 + (i * 0.1);
         if (i === 1) start = 1.5;
         const list = [];
-        let limit = 22.0; // Limit reduced to 22kHz
-
+        let limit = 22.0;
         for (let f = start; f <= limit; f += 1.0) {
             let hz = Math.round(f * 1000);
-            if (hz >= 1 && hz <= 22000) {
-                list.push(hz);
-                allFreqs.add(hz);
-            }
+            if (hz >= 1 && hz <= 22000) { list.push(hz); allFreqs.add(hz); }
         }
-        // Add the specific base frequency (1Hz, 1.1kHz, etc)
-        // Ensure 1Hz is explicitly added to the pool
         if (i === 0) { allFreqs.add(1); list.unshift(1); }
-        
         groups.push({ id: i + 1, freqs: list });
     }
     const globalPool = Array.from(allFreqs);
@@ -129,7 +122,7 @@
             for(let i=0; i<count; i++) {
                 freqsToPlay.push(globalPool[Math.floor(Math.random() * globalPool.length)]);
             }
-            label = `STEREO CLUSTER: ${count}/${maxTones} TONES`;
+            label = `DENSITY CLUSTER: ${count}/${maxTones} TONES`;
         } else if (mode === 'global') {
             freqsToPlay = [globalPool[Math.floor(Math.random() * globalPool.length)]];
             label = `GLOBAL: ${freqsToPlay[0]}Hz`;
@@ -154,21 +147,18 @@
             const osc = audioCtx.createOscillator();
             const panner = audioCtx.createStereoPanner();
             panner.pan.setValueAtTime((Math.random() * 2 - 1), now);
-
             osc.frequency.setValueAtTime(f, now);
             osc.connect(panner);
             panner.connect(burstGain);
-            
             osc.start(now);
             osc.stop(now + (durMs/1000));
         });
         setTimeout(playPulse, durMs);
     };
 
-    const toneSlider = document.getElementById('toneSlider');
-    const toneInput = document.getElementById('toneInput');
+    const toneSlider = document.getElementById('toneSlider'), toneInput = document.getElementById('toneInput');
     toneSlider.oninput = () => toneInput.value = toneSlider.value;
-    toneInput.oninput = () => { if (toneInput.value > 50) toneInput.value = 50; toneSlider.value = toneInput.value; };
+    toneInput.oninput = () => { if (toneInput.value > 100) toneInput.value = 100; toneSlider.value = toneInput.value; };
 
     document.getElementById('startBtn').onclick = () => {
         if (!isRunning) {
